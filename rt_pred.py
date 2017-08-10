@@ -1,5 +1,12 @@
 """
-Intro
+This python script contains two main function to predict the number of retweet.
+The first function non_user_agnostic_pred contains a process that predict the number of retweet using tweet and user information.
+As the number of retweet seems to be highly related to the suer that wrote it, I wrote a second function called text_based_prediction.
+This functions try to predict the number of reweet only according to the text body and hashtags.
+Those two function are not running on the same data set as the text based prediction is trained only on different text bodies,
+Information about testing sets are going with the RMSE to give you an insigh of each dataset.
+
+To run the script you just need to have a file containing twitter data named tweets.xlsx in the same directory
 """
 
 from __future__ import division
@@ -8,12 +15,36 @@ import numpy as np
 import gensim
 import xgboost as xgb
 import nltk
+import xlrd
+import unicodecsv as csv
 from nltk.corpus import stopwords
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn_pandas import DataFrameMapper
 
+def csv_from_excel(xls_input, csv_output):
+    """
+        Function that convert an xls file into a csv file from
+        #https://stackoverflow.com/questions/20105118/convert-xlsx-to-csv-correctly-using-python
+        param xls_input: xls file to convert
+        return csv_output: converted csv file
+    """
+    wb = xlrd.open_workbook(xls_input)
+    sh = wb.sheet_by_name('Sheet1')
+    your_csv_file = open(csv_output, 'wb')
+    wr = csv.writer(your_csv_file, quoting=csv.QUOTE_ALL)
+
+    for rownum in xrange(sh.nrows):
+        wr.writerow(sh.row_values(rownum))
+
+    your_csv_file.close()
+
 def body_model(data):
+    """
+    Create a word2vec model from TweetBody column of the data file
+    param data: Twitter data containing a TweetBody column
+    return model: Word2Vec model trained on tweet
+    """
     stoplist = stopwords.words('english')
     body = (data.TweetBody.fillna('')
                              .drop_duplicates()
@@ -29,6 +60,11 @@ def body_model(data):
     return model
 
 def hashtag_model(data):
+    """
+    Create a word2vec model from TweetHashtag column of the data file
+    param data: Twitter data containing a TweetHashTag column
+    return model: Word2Vec model trained on tweet
+    """
     hashtag = (data['TweetHashtags'].drop_duplicates()
                                     .fillna('')
                                     .str.lower().str.split(', '))
@@ -37,6 +73,12 @@ def hashtag_model(data):
     return model
 
 def create_vector(col, model):
+    """
+    Create vector according to the given column and model
+    param col: array column containing words of the sentence
+    param model: word2vec model to use for the transformation
+    return vector: vector representation of the sentence
+    """
     sentence = col
     vector = np.zeros(50)
     counter = 0
@@ -48,7 +90,14 @@ def create_vector(col, model):
     return list(vector)
 
 def non_user_agnostic_pred(model_hashtag, model_body, data):
-
+    """
+    Train and test a non user agnostic prediction model of the number of retweet per tweet
+    param model_hashtag: word2vec model trained for hashtags
+    param model_body: word2vec model trained for tweet body
+    param data: Twitter data
+    return dict: dictionnaries containing information about the test set: standard deviation, mean, max, min, median, size
+                    contains also the testing metric rmse : Root Mean Squared error obtained on the test set.
+    """
     stoplist = stopwords.words('english')
 
     usable_cols = [u'TweetPostedTime', u'TweetID', u'TweetBody', u'TweetRetweetFlag',
@@ -117,7 +166,14 @@ def non_user_agnostic_pred(model_hashtag, model_body, data):
             'size' : len(y_test.values)}
 
 def text_based_prediction(model_hashtag, model_body, data):
-
+    """
+    Train and test a text based prediction model of the number of retweet per tweet
+    param model_hashtag: word2vec model trained for hashtags
+    param model_body: word2vec model trained for tweet body
+    param data: Twitter data
+    return dict: dictionnaries containing information about the test set: standard deviation, mean, max, min, median, size
+                    contains also the testing metric rmse : Root Mean Squared error obtained on the test set.
+    """
     stoplist = stopwords.words('english')
     data = data[['TweetHashtags', 'TweetBody', 'TweetRetweetCount']].fillna('')
     data = data.drop_duplicates()
@@ -147,6 +203,7 @@ def text_based_prediction(model_hashtag, model_body, data):
     xgbmod = xgb.XGBRegressor()
     xgbmod.fit(X_train, y_train, early_stopping_rounds=10, eval_set=[(X_test, y_test)],verbose=True)
 
+
     return {'mean' : np.mean(y_train.values),
             'std' : np.std(y_train.values),
             'median' : np.median(y_train.values),
@@ -156,11 +213,12 @@ def text_based_prediction(model_hashtag, model_body, data):
             'size' : len(y_test.values)}
 
 if __name__ == '__main__':
+    csv_from_excel('tweets.xlsx', 'tweets.csv')
     data = pd.read_csv('tweets.csv')
-    body_mod = body_model(data)
-    hasht_mod = hashtag_model(data)
-    result_text = text_based_prediction(hasht_mod, body_mod, data)
-    result_user = non_user_agnostic_pred(hasht_mod, body_mod, data) 
+    model_body = body_model(data)
+    model_hashtag = hashtag_model(data)
+    result_text = text_based_prediction(model_hashtag, model_body, data)
+    result_user = non_user_agnostic_pred(model_hashtag, model_body, data) 
     print 'results for prediction based on text and hashtags only :'
     print result_text
     print 'result for preduction based on text and users features (non user agnostic):'
