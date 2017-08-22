@@ -120,7 +120,7 @@ def non_user_agnostic_pred(model_hashtag, model_body, data):
 
     data['body_vec'] = data.apply(lambda x: create_vector(x['TweetBody'], model_body), axis=1)    
 
-    encode_y = ['TweetPostedTime', 'UserLocation', 'UserSignupDate']
+    encode_y = ['UserLocation', 'UserSignupDate']
     encode_n = [u'TweetID', u'UserID', u'UserFollowersCount', u'UserFriendsCount',
                 u'UserListedCount', u'UserTweetCount', 'TweetRetweetCount', 'hashtag_vec', 'body_vec']
 
@@ -144,7 +144,7 @@ def non_user_agnostic_pred(model_hashtag, model_body, data):
     del data_le['hashtag_vec']
 
     Y_cols = [u'TweetRetweetCount']
-    X_cols = list(set(data_le.columns) - set(Y_cols))
+    X_cols = list(set(data_le.columns) - set(Y_cols) - set(['UserID', 'TweetID']))
     #X_cols = ['UserLocation', 'UserSignupDate']
 
     X = data_le[X_cols]
